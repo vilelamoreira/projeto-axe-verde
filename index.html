@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Axé Verde</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+
+<!-- Janela de seleção -->
+<div id="selecionar-tipo" class="modal" style="display: none;">
+  <div class="modal-content">
+    <h3>O que deseja marcar?</h3>
+    <button onclick="selecionarTipo('pontoForca')">Ponto de força</button>
+    <button onclick="selecionarTipo('cachoeira')">Rio / Cachoeira</button>
+    <button onclick="selecionarTipo('ervas')">Ervas</button>
+    <button onclick="selecionarTipo('descarte')">Descarte</button>
+    <br><br>
+    <button onclick="fecharModal()" style="background:#aaa;">Cancelar</button>
+  </div>
+</div>
+
+<body>
+  <header>
+    <div class="logo-titulo">
+      <h1>Axé Verde</h1>
+      <img src="imagens/logo.png" alt="Logo Axé Verde">
+    </div>
+
+
+    <nav>
+      <ul>
+        <li><a href="#" onclick="abrirLogin()">Login</a></li>
+        <li><a href="#" onclick="abrirCadastro()">Cadastro</a></li>
+        <li><a href="proposta.html">Proposta</a></li>
+        <li><a href="sustentaveis.html">Práticas Sustentáveis</a></li> 
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <div class="map-container">
+      <input type="text" id="endereco" placeholder="Digite um endereço em Votuporanga..." />
+      <button onclick="buscarEndereco()">Buscar</button>
+      <div id="map"></div>
+    </div>
+  </main>
+
+  <footer>
+    <p>&copy; 2025 Axé Verde - Votuporanga-SP</p>
+  </footer>
+
+  <!-- Modal de Cadastro -->
+<div id="modal-cadastro" class="modal" style="display: none;">
+  <div class="modal-content">
+    <h3>Cadastro</h3>
+    <input type="email" id="cadastro-email" placeholder="E-mail"><br><br>
+    <input type="password" id="cadastro-senha" placeholder="Senha"><br><br>
+    <input type="password" id="confirmar-senha" placeholder="Confirmar senha"><br><br>
+    <button onclick="realizarCadastro()">Cadastrar</button>
+    <br><br>
+    <button onclick="fecharCadastro()" style="background:#aaa;">Cancelar</button>
+  </div>
+</div>
+
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyBJsUXINBoswXBYRzLcmZy7P84h5tgoOvI",
+    authDomain: "projeto-axe-verde.firebaseapp.com",
+    projectId: "projeto-axe-verde",
+    storageBucket: "projeto-axe-verde.firebasestorage.app",
+    messagingSenderId: "759666572065",
+    appId: "1:759666572065:web:1e87a65a19fece77895c60"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+</script>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+  <!-- Modal de Login -->
+<div id="modal-login" class="modal" style="display: none;">
+  <div class="modal-content">
+    <h3>Login</h3>
+    <input type="email" id="email" placeholder="E-mail"><br><br>
+    <input type="password" id="senha" placeholder="Senha"><br><br>
+    <button onclick="realizarLogin()">Entrar</button>
+    <br><br>
+    <button onclick="fecharLogin()" style="background:#aaa;">Cancelar</button>
+  </div>
+</div>
+
+<script src="js/script.js"></script>
+
+</body>
+</html>
