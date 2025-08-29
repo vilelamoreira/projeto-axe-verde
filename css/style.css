@@ -233,3 +233,20 @@ footer {
   line-height: 1;
 }
 
+.btn-logout {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.btn-logout:hover {
+  background-color: #c0392b;
+}

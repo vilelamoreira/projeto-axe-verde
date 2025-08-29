@@ -195,5 +195,84 @@ function fecharModal() {
 // ============================================================
 carregarPontos();
 
+// Função de logout
+document.getElementById("btnLogout")?.addEventListener("click", () => {
+  firebase.auth().signOut()
+    .then(() => {
+      alert("Você saiu com sucesso!");
+      window.location.href = "login.html"; // ajuste se o nome do arquivo de login for diferente
+    })
+    .catch((error) => {
+      console.error("Erro ao sair:", error);
+    });
+});
 
+firebase.auth().currentUser.uid
 
+function salvarPonto(tipo, descricao, lat, lng) {
+  const user = firebase.auth().currentUser;
+  if (!user) return alert("Você precisa estar logado para salvar pontos.");
+
+  const novoPonto = {
+    tipo: tipo,
+    descricao: descricao,
+    lat: lat,
+    lng: lng,
+    userId: user.uid,   // 🔹 salva o dono do ponto
+    criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+  };
+
+  db.collection("pontos").add(novoPonto)
+    .then(() => {
+      console.log("Ponto salvo com sucesso!");
+    })
+    .catch((error) => {
+      console.error("Erro ao salvar ponto:", error);
+    });
+}
+
+function carregarPontosNoMapa() {
+  const user = firebase.auth().currentUser;
+
+  db.collection("pontos").onSnapshot((snapshot) => {
+    snapshot.forEach((doc) => {
+      const ponto = doc.data();
+      const marker = L.marker([ponto.lat, ponto.lng], {
+        icon: escolherIcone(ponto.tipo)
+      }).addTo(map);
+
+      let popupContent = `<b>${ponto.tipo}</b><br>${ponto.descricao}`;
+
+      // 🔹 Só mostra botão excluir se o ponto for do usuário logado
+      if (user && ponto.userId === user.uid) {
+        popupContent += `
+          <br><button onclick="excluirPonto('${doc.id}')">
+            Excluir
+          </button>`;
+      }
+
+      marker.bindPopup(popupContent);
+    });
+  });
+}
+
+function excluirPonto(pontoId) {
+  const user = firebase.auth().currentUser;
+  if (!user) return alert("Você precisa estar logado.");
+
+  const docRef = db.collection("pontos").doc(pontoId);
+
+  docRef.get().then((doc) => {
+    if (doc.exists && doc.data().userId === user.uid) {
+      docRef.delete()
+        .then(() => {
+          alert("Ponto excluído com sucesso!");
+        })
+        .catch((error) => {
+          console.error("Erro ao excluir ponto:", error);
+        });
+    } else {
+      alert("Você não tem permissão para excluir este ponto.");
+    }
+  });
+}
