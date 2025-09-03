@@ -90,8 +90,12 @@ function realizarLogin() {
 }
 
 // ============================================================
-// SALVAR E CARREGAR PONTOS
+// PONTOS: salvar, listar em tempo real e excluir (apenas do dono)
 // ============================================================
+
+// ⛔️ IMPORTANTE: este bloco substitui as funções duplicadas anteriores.
+// Apaga chamadas antigas como `carregarPontos();` e qualquer `firebase.auth().currentUser.uid` solto.
+
 async function salvarPonto(tipo, descricao, lat, lng) {
   const user = auth.currentUser;
   if (!user) {
@@ -105,67 +109,122 @@ async function salvarPonto(tipo, descricao, lat, lng) {
       descricao,
       lat,
       lng,
-      userId: user.uid,
-      criadoEm: new Date(),
+      userId: user.uid, // dono da marcação
+      criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
     });
-    carregarPontos(); // atualiza mapa
+    // O listener em tempo real atualiza o mapa sozinho
   } catch (e) {
     console.error("Erro ao salvar ponto:", e);
+    alert("Erro ao salvar ponto.");
   }
 }
 
-async function carregarPontos() {
-  const snapshot = await db.collection("pontos").get();
-  snapshot.forEach((doc) => {
-    const p = doc.data();
-    L.marker([p.lat, p.lng], { icon: icones[p.tipo] })
-      .addTo(map)
-      .bindPopup(`<b>${nomesAmigaveis[p.tipo]}</b><br>${p.descricao}`);
+// --- Listener em tempo real dos pontos ---
+let unsubscribePontos = null;
+const markersById = {}; // id do doc -> marker Leaflet
+
+function limparTodosMarcadores() {
+  Object.values(markersById).forEach((m) => map.removeLayer(m));
+  for (const id in markersById) delete markersById[id];
+}
+
+function iniciarListenerPontos(user) {
+  // Cancela listener anterior (se houver) e limpa marcadores
+  if (unsubscribePontos) {
+    unsubscribePontos();
+    unsubscribePontos = null;
+  }
+  limparTodosMarcadores();
+
+  // Mostra TODOS os pontos para qualquer visitante
+  unsubscribePontos = db.collection("pontos").onSnapshot((snapshot) => {
+    snapshot.docChanges().forEach((change) => {
+      const id = change.doc.id;
+
+      if (change.type === "removed") {
+        if (markersById[id]) {
+          map.removeLayer(markersById[id]);
+          delete markersById[id];
+        }
+        return;
+      }
+
+      // added / modified → (re)criar marcador
+      const p = change.doc.data();
+
+      // remove marcador antigo se existir (para "modified")
+      if (markersById[id]) {
+        map.removeLayer(markersById[id]);
+        delete markersById[id];
+      }
+
+      const icon = icones[p.tipo] || L.icon({ iconUrl: "imagens/pontoForca.png", iconSize: [32, 32] });
+
+      const marker = L.marker([p.lat, p.lng], { icon }).addTo(map);
+
+      let popupHtml = `<b>${nomesAmigaveis[p.tipo] || p.tipo}</b><br>${p.descricao}`;
+
+      // Só o dono vê o botão de excluir
+      if (user && user.uid === p.userId) {
+        popupHtml += `<br><button onclick="excluirPonto('${id}')">Excluir marcação.</button>`;
+      }
+
+      marker.bindPopup(popupHtml);
+      markersById[id] = marker;
+    });
+  });
+}
+
+// --- Excluir marcação (apenas do dono) ---
+function excluirPonto(pontoId) {
+  const user = auth.currentUser;
+  if (!user) return alert("Você precisa estar logado.");
+
+  const docRef = db.collection("pontos").doc(pontoId);
+
+  docRef.get().then((doc) => {
+    if (!doc.exists) return;
+
+    const data = doc.data();
+    if (data.userId !== user.uid) {
+      alert("Você não tem permissão para excluir esta marcação.");
+      return;
+    }
+
+    return docRef.delete().then(() => {
+      // O listener em tempo real remove o marcador do mapa
+      alert("Ponto excluído com sucesso!");
+    });
+  }).catch((err) => {
+    console.error("Erro ao excluir ponto:", err);
+    alert("Erro ao excluir ponto.");
   });
 }
 
 // ============================================================
-// EVENTOS
+// AUTENTICAÇÃO: mostrar/esconder botão Sair e redirecionar ao sair
 // ============================================================
+auth.onAuthStateChanged((user) => {
+  const logoutBtn = document.getElementById("btnLogout");
+  if (logoutBtn) logoutBtn.style.display = user ? "block" : "none";
 
-// Buscar endereço
-function buscarEndereco() {
-  const endereco = document.getElementById("endereco").value;
-  if (!endereco) return;
+  // Recria os popups conforme o usuário (para mostrar/ocultar "Excluir marcação.")
+  iniciarListenerPontos(user || null);
+});
 
-  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-    endereco + ", Votuporanga, SP"
-  )}`;
-
-  fetch(url)
-    .then((res) => res.json())
-    .then((data) => {
-      if (data.length === 0) {
-        alert("Endereço não encontrado.");
-        return;
-      }
-
-      const lat = parseFloat(data[0].lat);
-      const lon = parseFloat(data[0].lon);
-
-      map.setView([lat, lon], 15);
-
-      if (marcadorBusca) {
-        marcadorBusca
-          .setLatLng([lat, lon])
-          .setPopupContent(endereco)
-          .openPopup();
-      } else {
-        marcadorBusca = L.marker([lat, lon]).addTo(map).bindPopup(endereco).openPopup();
-      }
+// Botão Sair → desloga e volta à tela principal (index.html)
+document.getElementById("btnLogout")?.addEventListener("click", () => {
+  auth.signOut()
+    .then(() => {
+      window.location.href = "index.html";
     })
-    .catch((err) => {
-      console.error("Erro ao buscar endereço:", err);
-      alert("Erro ao buscar endereço.");
+    .catch((error) => {
+      console.error("Erro ao sair:", error);
+      alert("Erro ao sair.");
     });
-}
+});
 
-// Clique no mapa -> abre modal de seleção de tipo
+// Clique no mapa -> abre modal de seleção (somente se logado)
 map.on("click", function (e) {
   if (!auth.currentUser) {
     alert("Você precisa estar logado para marcar pontos no mapa.");
@@ -175,104 +234,18 @@ map.on("click", function (e) {
   document.getElementById("selecionar-tipo").style.display = "block";
 });
 
-// Botões do modal de seleção
+// Botões do modal chamam selecionarTipo('pontoForca'|'cachoeira'|'descarte'|'ervas')
 function selecionarTipo(tipo) {
-  const descricao = prompt("Descrição do ponto:");
+  const descricao = prompt("Descreva brevemente este ponto:");
   if (!descricao || !posicaoSelecionada) {
     alert("Preencha corretamente.");
     return;
   }
   salvarPonto(tipo, descricao, posicaoSelecionada.lat, posicaoSelecionada.lng);
-  fecharModal();
+  fecharModal(); // mantém seu fluxo
 }
 
 function fecharModal() {
   document.getElementById("selecionar-tipo").style.display = "none";
 }
 
-// ============================================================
-// INICIALIZAÇÃO
-// ============================================================
-carregarPontos();
-
-// Função de logout
-document.getElementById("btnLogout")?.addEventListener("click", () => {
-  firebase.auth().signOut()
-    .then(() => {
-      alert("Você saiu com sucesso!");
-      window.location.href = "login.html"; // ajuste se o nome do arquivo de login for diferente
-    })
-    .catch((error) => {
-      console.error("Erro ao sair:", error);
-    });
-});
-
-firebase.auth().currentUser.uid
-
-function salvarPonto(tipo, descricao, lat, lng) {
-  const user = firebase.auth().currentUser;
-  if (!user) return alert("Você precisa estar logado para salvar pontos.");
-
-  const novoPonto = {
-    tipo: tipo,
-    descricao: descricao,
-    lat: lat,
-    lng: lng,
-    userId: user.uid,   // 🔹 salva o dono do ponto
-    criadoEm: firebase.firestore.FieldValue.serverTimestamp()
-  };
-
-  db.collection("pontos").add(novoPonto)
-    .then(() => {
-      console.log("Ponto salvo com sucesso!");
-    })
-    .catch((error) => {
-      console.error("Erro ao salvar ponto:", error);
-    });
-}
-
-function carregarPontosNoMapa() {
-  const user = firebase.auth().currentUser;
-
-  db.collection("pontos").onSnapshot((snapshot) => {
-    snapshot.forEach((doc) => {
-      const ponto = doc.data();
-      const marker = L.marker([ponto.lat, ponto.lng], {
-        icon: escolherIcone(ponto.tipo)
-      }).addTo(map);
-
-      let popupContent = `<b>${ponto.tipo}</b><br>${ponto.descricao}`;
-
-      // 🔹 Só mostra botão excluir se o ponto for do usuário logado
-      if (user && ponto.userId === user.uid) {
-        popupContent += `
-          <br><button onclick="excluirPonto('${doc.id}')">
-            Excluir
-          </button>`;
-      }
-
-      marker.bindPopup(popupContent);
-    });
-  });
-}
-
-function excluirPonto(pontoId) {
-  const user = firebase.auth().currentUser;
-  if (!user) return alert("Você precisa estar logado.");
-
-  const docRef = db.collection("pontos").doc(pontoId);
-
-  docRef.get().then((doc) => {
-    if (doc.exists && doc.data().userId === user.uid) {
-      docRef.delete()
-        .then(() => {
-          alert("Ponto excluído com sucesso!");
-        })
-        .catch((error) => {
-          console.error("Erro ao excluir ponto:", error);
-        });
-    } else {
-      alert("Você não tem permissão para excluir este ponto.");
-    }
-  });
-}
