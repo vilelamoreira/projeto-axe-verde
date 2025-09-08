@@ -249,3 +249,55 @@ function fecharModal() {
   document.getElementById("selecionar-tipo").style.display = "none";
 }
 
+// Buscar endereço
+function buscarEndereco() {
+  const endereco = document.getElementById("endereco").value;
+  if (!endereco) return;
+
+  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+    endereco + ", Votuporanga, SP"
+  )}`;
+
+  fetch(url)
+    .then((res) => res.json())
+    .then((data) => {
+      if (data.length === 0) {
+        alert("Endereço não encontrado.");
+        return;
+      }
+
+      const lat = parseFloat(data[0].lat);
+      const lon = parseFloat(data[0].lon);
+
+      map.setView([lat, lon], 15);
+
+      if (marcadorBusca) {
+        marcadorBusca
+          .setLatLng([lat, lon])
+          .setPopupContent(endereco)
+          .openPopup();
+      } else {
+        marcadorBusca = L.marker([lat, lon]).addTo(map).bindPopup(endereco).openPopup();
+      }
+    })
+    .catch((err) => {
+      console.error("Erro ao buscar endereço:", err);
+      alert("Erro ao buscar endereço.");
+    });
+}
+
+firebase.auth().onAuthStateChanged((user) => {
+  const logoutBtn = document.getElementById("btnLogout");
+
+  if (user) {
+    console.log("Usuário logado:", user.email);
+    if (logoutBtn) logoutBtn.style.display = "block";
+  } else {
+    console.log("Visitante");
+    if (logoutBtn) logoutBtn.style.display = "none";
+  }
+
+  // 🔹 Sempre carrega pontos, independente do login
+  carregarPontos(user);
+});
+
