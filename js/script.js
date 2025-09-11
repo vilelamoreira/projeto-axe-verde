@@ -300,4 +300,3 @@ firebase.auth().onAuthStateChanged((user) => {
   // 🔹 Sempre carrega pontos, independente do login
   carregarPontos(user);
 });
-
